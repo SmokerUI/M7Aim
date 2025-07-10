@@ -1,96 +1,112 @@
 --[[
-    Script: Universal FE GUI (Chat Sender + Flag Game) v2
-    Description: A more robust, multi-tab GUI designed for maximum compatibility across Roblox experiences.
-    - Tab 1: Send custom messages in chat.
-    - Tab 2: Host a "Guess the Flag" game in Arabic.
+    Script: Flag Game GUI v3 (Arabic)
+    Description: A specialized GUI to host a "Guess the Flag" game in Arabic.
+    - Features a larger library of flags with more answer variations.
+    - Includes a toggle button to hide/show the GUI, compatible with both PC and mobile.
     - Fully FE compatible and works with both new (TextChatService) and legacy chat systems.
-    - Features enhanced error handling and a more efficient event-driven game loop.
+    - Features an efficient event-driven game loop.
 
     How to use:
     1. Copy this entire script.
     2. Open your script executor in a Roblox game.
     3. Paste the script and execute it.
-    4. A GUI will appear. Use the tabs to switch between functions.
+    4. A GUI will appear. Use the "Start" button to begin the game. Use the "Hide/Show" button in the top-right to toggle the GUI's visibility.
 ]]
 
-local function CreateUniversalGui()
+local function CreateFlagGameGui()
     
     -- // Services & Checks (wrapped for safety)
-    local Players, UserInputService, TextChatService, ReplicatedStorage, CoreGui
+    local Players, UserInputService, TextChatService, ReplicatedStorage
     local servicesAvailable = pcall(function()
         Players = game:GetService("Players")
         UserInputService = game:GetService("UserInputService")
         TextChatService = game:GetService("TextChatService")
         ReplicatedStorage = game:GetService("ReplicatedStorage")
-        CoreGui = game:GetService("CoreGui")
     end)
     
     if not servicesAvailable then
-        warn("Universal GUI: Could not get essential services. The script may not function correctly.")
+        warn("Flag Game GUI: Could not get essential services. The script may not function correctly.")
         return
     end
 
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then
-        warn("Universal GUI: Could not find LocalPlayer.")
+        warn("Flag Game GUI: Could not find LocalPlayer.")
         return
     end
 
     -- // Configuration
-    local guiName = "UniversalGUI_" .. tostring(math.random(1000, 9999))
+    local mainGuiName = "FlagGameGUI_" .. tostring(math.random(1000, 9999))
+    local toggleGuiName = "ToggleGUI_" .. tostring(math.random(1000, 9999))
     
     -- // Smart GUI Parent determination
     local function getGuiParent()
         local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
         if success and coreGui then
-            if coreGui:FindFirstChild(guiName) then coreGui[guiName]:Destroy() end
+            if coreGui:FindFirstChild(mainGuiName) then coreGui[mainGuiName]:Destroy() end
+            if coreGui:FindFirstChild(toggleGuiName) then coreGui[toggleGuiName]:Destroy() end
             return coreGui
         end
         -- Fallback for environments where CoreGui is not directly accessible
-        warn("Universal GUI: Could not access CoreGui, falling back to PlayerGui. GUI may be removed on respawn.")
+        warn("Flag Game GUI: Could not access CoreGui, falling back to PlayerGui. GUI may be removed on respawn.")
         local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-        if playerGui:FindFirstChild(guiName) then playerGui[guiName]:Destroy() end
+        if playerGui:FindFirstChild(mainGuiName) then playerGui[mainGuiName]:Destroy() end
+        if playerGui:FindFirstChild(toggleGuiName) then playerGui[toggleGuiName]:Destroy() end
         return playerGui
     end
     
     local guiParent = getGuiParent()
     if not guiParent then
-        warn("Universal GUI: Could not find a suitable parent for the GUI. Aborting.")
+        warn("Flag Game GUI: Could not find a suitable parent for the GUI. Aborting.")
         return
     end
 
-    -- // Flag Game Data (in Arabic & English for wider matching)
+    -- // Flag Game Data (Expanded List in Arabic & English)
     local flagsData = {
-        { flag = "ðŸ‡¸ðŸ‡¦", answers = { "Ø§Ù„Ø³Ø¹ÙˆØ¯ÙŠØ©", "Ø§Ù„Ù…Ù…Ù„ÙƒØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø§Ù„Ø³Ø¹ÙˆØ¯ÙŠØ©", "saudi arabia", "ksa" } },
-        { flag = "ðŸ‡ªðŸ‡¬", answers = { "Ù…ØµØ±", "Ø¬Ù…Ù‡ÙˆØ±ÙŠØ© Ù…ØµØ± Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©", "egypt" } },
-        { flag = "ðŸ‡¦ðŸ‡ª", answers = { "Ø§Ù„Ø§Ù…Ø§Ø±Ø§Øª", "Ø§Ù„Ø¥Ù…Ø§Ø±Ø§Øª Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø§Ù„Ù…ØªØ­Ø¯Ø©", "uae", "united arab emirates" } },
-        { flag = "ðŸ‡¯ðŸ‡´", answers = { "Ø§Ù„Ø§Ø±Ø¯Ù†", "Ø§Ù„Ø£Ø±Ø¯Ù†", "jordan" } },
-        { flag = "ðŸ‡µðŸ‡¸", answers = { "ÙÙ„Ø³Ø·ÙŠÙ†", "palestine" } },
-        { flag = "ðŸ‡®ðŸ‡¶", answers = { "Ø§Ù„Ø¹Ø±Ø§Ù‚", "iraq" } },
-        { flag = "ðŸ‡¸ðŸ‡¾", answers = { "Ø³ÙˆØ±ÙŠØ§", "Ø³ÙˆØ±ÙŠØ©", "syria" } },
-        { flag = "ðŸ‡±ðŸ‡§", answers = { "Ù„Ø¨Ù†Ø§Ù†", "lebanon" } },
-        { flag = "ðŸ‡°ðŸ‡¼", answers = { "Ø§Ù„ÙƒÙˆÙŠØª", "kuwait" } },
-        { flag = "ðŸ‡¶ðŸ‡¦", answers = { "Ù‚Ø·Ø±", "qatar" } },
-        { flag = "ðŸ‡§ðŸ‡­", answers = { "Ø§Ù„Ø¨Ø­Ø±ÙŠÙ†", "bahrain" } },
-        { flag = "ðŸ‡´ðŸ‡²", answers = { "Ø¹Ù…Ø§Ù†", "Ø³Ù„Ø·Ù†Ø© Ø¹Ù…Ø§Ù†", "oman" } },
-        { flag = "ðŸ‡¾ðŸ‡ª", answers = { "Ø§Ù„ÙŠÙ…Ù†", "yemen" } },
-        { flag = "ðŸ‡©ðŸ‡¿", answers = { "Ø§Ù„Ø¬Ø²Ø§Ø¦Ø±", "algeria" } },
-        { flag = "ðŸ‡²ðŸ‡¦", answers = { "Ø§Ù„Ù…ØºØ±Ø¨", "morocco" } },
-        { flag = "ðŸ‡¹ðŸ‡³", answers = { "ØªÙˆÙ†Ø³", "tunisia" } },
-        { flag = "ðŸ‡±ðŸ‡¾", answers = { "Ù„ÙŠØ¨ÙŠØ§", "libya" } },
-        { flag = "ðŸ‡¸ðŸ‡©", answers = { "Ø§Ù„Ø³ÙˆØ¯Ø§Ù†", "sudan" } },
-        { flag = "ðŸ‡¹ðŸ‡·", answers = { "ØªØ±ÙƒÙŠØ§", "turkey" } },
-        { flag = "ðŸ‡ºðŸ‡¸", answers = { "Ø§Ù…Ø±ÙŠÙƒØ§", "Ø§Ù„ÙˆÙ„Ø§ÙŠØ§Øª Ø§Ù„Ù…ØªØ­Ø¯Ø©", "usa", "america" } },
-        { flag = "ðŸ‡¬ðŸ‡§", answers = { "Ø¨Ø±ÙŠØ·Ø§Ù†ÙŠØ§", "Ø§Ù„Ù…Ù…Ù„ÙƒØ© Ø§Ù„Ù…ØªØ­Ø¯Ø©", "uk", "britain" } },
-        { flag = "ðŸ‡«ðŸ‡·", answers = { "ÙØ±Ù†Ø³Ø§", "france" } },
-        { flag = "ðŸ‡©ðŸ‡ª", answers = { "Ø§Ù„Ù…Ø§Ù†ÙŠØ§", "Ø£Ù„Ù…Ø§Ù†ÙŠØ§", "germany" } },
-        { flag = "ðŸ‡®ðŸ‡¹", answers = { "Ø§ÙŠØ·Ø§Ù„ÙŠØ§", "Ø¥ÙŠØ·Ø§Ù„ÙŠØ§", "italy" } },
-        { flag = "ðŸ‡ªðŸ‡¸", answers = { "Ø§Ø³Ø¨Ø§Ù†ÙŠØ§", "Ø¥Ø³Ø¨Ø§Ù†ÙŠØ§", "spain" } },
-        { flag = "ðŸ‡·ðŸ‡º", answers = { "Ø±ÙˆØ³ÙŠØ§", "russia" } },
-        { flag = "ðŸ‡¨ðŸ‡³", answers = { "Ø§Ù„ØµÙŠÙ†", "china" } },
-        { flag = "ðŸ‡¯ðŸ‡µ", answers = { "Ø§Ù„ÙŠØ§Ø¨Ø§Ù†", "japan" } },
-        { flag = "ðŸ‡§ðŸ‡·", answers = { "Ø§Ù„Ø¨Ø±Ø§Ø²ÙŠÙ„", "brazil" } },
-        { flag = "ðŸ‡¦ðŸ‡·", answers = { "Ø§Ù„Ø§Ø±Ø¬Ù†ØªÙŠÙ†", "Ø§Ù„Ø£Ø±Ø¬Ù†ØªÙŠÙ†", "argentina" } }
+        { flag = "🇸🇦", answers = { "السعودية", "المملكة العربية السعودية", "saudi arabia", "ksa" } },
+        { flag = "🇪🇬", answers = { "مصر", "جمهورية مصر العربية", "egypt" } },
+        { flag = "🇦🇪", answers = { "الامارات", "الإمارات العربية المتحدة", "uae", "united arab emirates" } },
+        { flag = "🇯🇴", answers = { "الاردن", "الأردن", "jordan" } },
+        { flag = "🇵🇸", answers = { "فلسطين", "palestine" } },
+        { flag = "🇮🇶", answers = { "العراق", "iraq" } },
+        { flag = "🇸🇾", answers = { "سوريا", "سورية", "syria" } },
+        { flag = "🇱🇧", answers = { "لبنان", "lebanon" } },
+        { flag = "🇰🇼", answers = { "الكويت", "kuwait" } },
+        { flag = "🇶🇦", answers = { "قطر", "qatar" } },
+        { flag = "🇧🇭", answers = { "البحرين", "bahrain" } },
+        { flag = "🇴🇲", answers = { "عمان", "سلطنة عمان", "oman" } },
+        { flag = "🇾🇪", answers = { "اليمن", "yemen" } },
+        { flag = "🇩🇿", answers = { "الجزائر", "algeria" } },
+        { flag = "🇲🇦", answers = { "المغرب", "morocco" } },
+        { flag = "🇹🇳", answers = { "تونس", "tunisia" } },
+        { flag = "🇱🇾", answers = { "ليبيا", "libya" } },
+        { flag = "🇸🇩", answers = { "السودان", "sudan" } },
+        { flag = "🇹🇷", answers = { "تركيا", "turkey" } },
+        { flag = "🇺🇸", answers = { "امريكا", "الولايات المتحدة", "الولايات المتحدة الامريكية", "usa", "america", "united states" } },
+        { flag = "🇬🇧", answers = { "بريطانيا", "المملكة المتحدة", "uk", "britain", "united kingdom" } },
+        { flag = "🇫🇷", answers = { "فرنسا", "france" } },
+        { flag = "🇩🇪", answers = { "المانيا", "ألمانيا", "germany" } },
+        { flag = "🇮🇹", answers = { "ايطاليا", "إيطاليا", "italy" } },
+        { flag = "🇪🇸", answers = { "اسبانيا", "إسبانيا", "spain" } },
+        { flag = "🇷🇺", answers = { "روسيا", "russia" } },
+        { flag = "🇨🇳", answers = { "الصين", "china" } },
+        { flag = "🇯🇵", answers = { "اليابان", "japan" } },
+        { flag = "🇧🇷", answers = { "البرازيل", "brazil" } },
+        { flag = "🇦🇷", answers = { "الارجنتين", "الأرجنتين", "argentina" } },
+        { flag = "🇨🇦", answers = { "كندا", "canada" } },
+        { flag = "🇦🇺", answers = { "استراليا", "أستراليا", "australia" } },
+        { flag = "🇮🇳", answers = { "الهند", "india" } },
+        { flag = "🇵🇰", answers = { "باكستان", "pakistan" } },
+        { flag = "🇰🇷", answers = { "كوريا الجنوبية", "south korea" } },
+        { flag = "🇲🇽", answers = { "المكسيك", "mexico" } },
+        { flag = "🇳🇬", answers = { "نيجيريا", "nigeria" } },
+        { flag = "🇿🇦", answers = { "جنوب افريقيا", "south africa" } },
+        { flag = "🇳🇱", answers = { "هولندا", "netherlands" } },
+        { flag = "🇵🇹", answers = { "البرتغال", "portugal" } },
+        { flag = "🇸🇪", answers = { "السويد", "sweden" } },
+        { flag = "🇨🇭", answers = { "سويسرا", "switzerland" } },
+        { flag = "🇬🇷", answers = { "اليونان", "greece" } },
+        { flag = "🇮🇪", answers = { "ايرلندا", "ireland" } }
     }
 
     -- // Game State Variables
@@ -114,7 +130,7 @@ local function CreateUniversalGui()
                 if generalChannel then
                     generalChannel:SendAsync(message)
                 else
-                    warn("Universal GUI: Could not find RBXGeneral channel in TextChatService.")
+                    warn("Flag Game GUI: Could not find RBXGeneral channel in TextChatService.")
                 end
             end)
         else
@@ -123,7 +139,7 @@ local function CreateUniversalGui()
                 ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, "All")
             end)
             if not success then
-                warn("Universal GUI: Could not send message via standard legacy chat event. This game may use a custom chat system.")
+                warn("Flag Game GUI: Could not send message via standard legacy chat event. This game may use a custom chat system.")
             end
         end
     end
@@ -131,14 +147,12 @@ local function CreateUniversalGui()
     local function onMessageReceived(player, message)
         if not gameRunning or not currentFlagData or player == LocalPlayer then return end
 
+        -- Normalize the guess: lowercase and remove leading/trailing whitespace
         local guess = message:lower():gsub("^%s*(.-)%s*$", "%1")
 
         for _, answer in ipairs(currentFlagData.answers) do
             if guess == answer:lower() then
-                local flagEmoji = currentFlagData.flag
-                local mainAnswer = currentFlagData.answers[1]
-                
-                sendMessage(`Ø§Ù„Ù„Ø§Ø¹Ø¨ {player.Name} Ø®Ù…Ù† Ø¨Ø´ÙƒÙ„ ØµØ­ÙŠØ­! âœ… `)
+                sendMessage(`اللاعب {player.Name} خمن بشكل صحيح! ✅`)
                 
                 -- Fire the event to signal the main game loop that the round is over.
                 roundGuessedEvent:Fire()
@@ -151,8 +165,9 @@ local function CreateUniversalGui()
     -- // GUI CREATION
     ---------------------------------------------------------------------
 
+    -- Main GUI
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = guiName
+    ScreenGui.Name = mainGuiName
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.ResetOnSpawn = false
 
@@ -162,10 +177,11 @@ local function CreateUniversalGui()
     MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
     MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 120)
     MainFrame.BorderSizePixel = 2
-    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
-    MainFrame.Size = UDim2.new(0, 400, 0, 250)
+    MainFrame.Position = UDim2.new(0.5, -175, 0.5, -110)
+    MainFrame.Size = UDim2.new(0, 350, 0, 220)
     MainFrame.Active = true
     MainFrame.Draggable = true
+    MainFrame.Visible = true -- Starts visible
 
     local TitleBar = Instance.new("Frame")
     TitleBar.Name = "TitleBar"
@@ -180,179 +196,124 @@ local function CreateUniversalGui()
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Size = UDim2.new(1, 0, 1, 0)
     TitleLabel.Font = Enum.Font.SourceSansBold
-    TitleLabel.Text = "Universal GUI"
+    TitleLabel.Text = "لعبة تخمين الأعلام"
     TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     TitleLabel.TextSize = 16
-
-    local TabFrame = Instance.new("Frame")
-    TabFrame.Name = "TabFrame"
-    TabFrame.Parent = MainFrame
-    TabFrame.BackgroundTransparency = 1
-    TabFrame.Position = UDim2.new(0, 0, 0, 30)
-    TabFrame.Size = UDim2.new(1, 0, 0, 35)
-
-    local ChatTabButton = Instance.new("TextButton")
-    ChatTabButton.Name = "ChatTabButton"
-    ChatTabButton.Parent = TabFrame
-    ChatTabButton.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-    ChatTabButton.BorderSizePixel = 0
-    ChatTabButton.Position = UDim2.new(0, 5, 0, 0)
-    ChatTabButton.Size = UDim2.new(0.5, -7.5, 1, 0)
-    ChatTabButton.Font = Enum.Font.SourceSansBold
-    ChatTabButton.Text = "Ù…Ø±Ø³Ù„ Ø§Ù„Ø¯Ø±Ø¯Ø´Ø©"
-    ChatTabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ChatTabButton.TextSize = 14
-
-    local FlagGameTabButton = Instance.new("TextButton")
-    FlagGameTabButton.Name = "FlagGameTabButton"
-    FlagGameTabButton.Parent = TabFrame
-    FlagGameTabButton.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
-    FlagGameTabButton.Position = UDim2.new(0.5, 2.5, 0, 0)
-    FlagGameTabButton.Size = UDim2.new(0.5, -7.5, 1, 0)
-    FlagGameTabButton.Font = Enum.Font.SourceSansBold
-    FlagGameTabButton.Text = "Ù„Ø¹Ø¨Ø© ØªØ®Ù…ÙŠÙ† Ø§Ù„Ø£Ø¹Ù„Ø§Ù…"
-    FlagGameTabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-    FlagGameTabButton.TextSize = 14
 
     local ContentFrame = Instance.new("Frame")
     ContentFrame.Name = "ContentFrame"
     ContentFrame.Parent = MainFrame
     ContentFrame.BackgroundTransparency = 1
-    ContentFrame.Position = UDim2.new(0, 0, 0, 65)
-    ContentFrame.Size = UDim2.new(1, 0, 1, -65)
-
-    local ChatSenderPage = Instance.new("Frame")
-    ChatSenderPage.Name = "ChatSenderPage"
-    ChatSenderPage.Parent = ContentFrame
-    ChatSenderPage.BackgroundTransparency = 1
-    ChatSenderPage.Size = UDim2.new(1, 0, 1, 0)
-    ChatSenderPage.Visible = true
-
-    local MessageBox = Instance.new("TextBox")
-    MessageBox.Parent = ChatSenderPage
-    MessageBox.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-    MessageBox.BorderColor3 = Color3.fromRGB(80, 80, 120)
-    MessageBox.Position = UDim2.new(0.05, 0, 0.1, 0)
-    MessageBox.Size = UDim2.new(0.9, 0, 0, 50)
-    MessageBox.Font = Enum.Font.SourceSans
-    MessageBox.PlaceholderText = "Ø§ÙƒØªØ¨ Ø±Ø³Ø§Ù„ØªÙƒ Ù‡Ù†Ø§..."
-    MessageBox.TextColor3 = Color3.fromRGB(225, 225, 225)
-    MessageBox.TextSize = 14
-    MessageBox.ClearTextOnFocus = false
-
-    local SendButton = Instance.new("TextButton")
-    SendButton.Parent = ChatSenderPage
-    SendButton.BackgroundColor3 = Color3.fromRGB(80, 80, 120)
-    SendButton.Position = UDim2.new(0.05, 0, 0, 100)
-    SendButton.Size = UDim2.new(0.9, 0, 0, 40)
-    SendButton.Font = Enum.Font.SourceSansBold
-    SendButton.Text = "Ø¥Ø±Ø³Ø§Ù„"
-    SendButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SendButton.TextSize = 16
-
-    local FlagGamePage = Instance.new("Frame")
-    FlagGamePage.Parent = ContentFrame
-    FlagGamePage.BackgroundTransparency = 1
-    FlagGamePage.Size = UDim2.new(1, 0, 1, 0)
-    FlagGamePage.Visible = false
+    ContentFrame.Position = UDim2.new(0, 0, 0, 30) -- Position right below the title bar
+    ContentFrame.Size = UDim2.new(1, 0, 1, -30) -- Fill the rest of the frame
 
     local TimeLabel = Instance.new("TextLabel")
-    TimeLabel.Parent = FlagGamePage
+    TimeLabel.Parent = ContentFrame
     TimeLabel.BackgroundTransparency = 1
     TimeLabel.Position = UDim2.new(0.05, 0, 0.1, 0)
     TimeLabel.Size = UDim2.new(0.9, 0, 0, 30)
     TimeLabel.Font = Enum.Font.SourceSansBold
-    TimeLabel.Text = "Ø§Ø¶ØºØ· Ø§Ø¨Ø¯Ø£ Ù„Ø¨Ø¯Ø¡ Ø§Ù„Ù„Ø¹Ø¨Ø©"
+    TimeLabel.Text = "اضغط ابدأ لبدء اللعبة"
     TimeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     TimeLabel.TextSize = 18
     TimeLabel.TextXAlignment = Enum.TextXAlignment.Center
 
     local StartGameButton = Instance.new("TextButton")
-    StartGameButton.Parent = FlagGamePage
+    StartGameButton.Parent = ContentFrame
     StartGameButton.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
-    StartGameButton.Position = UDim2.new(0.05, 0, 0, 100)
+    StartGameButton.Position = UDim2.new(0.05, 0, 0.5, 0) -- Centered vertically
     StartGameButton.Size = UDim2.new(0.9, 0, 0, 40)
     StartGameButton.Font = Enum.Font.SourceSansBold
-    StartGameButton.Text = "Ø§Ø¨Ø¯Ø£"
+    StartGameButton.Text = "ابدأ"
     StartGameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     StartGameButton.TextSize = 16
 
     local StopGameButton = Instance.new("TextButton")
-    StopGameButton.Parent = FlagGamePage
+    StopGameButton.Parent = ContentFrame
     StopGameButton.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
-    StopGameButton.Position = UDim2.new(0.05, 0, 0, 100)
+    StopGameButton.Position = UDim2.new(0.05, 0, 0.5, 0)
     StopGameButton.Size = UDim2.new(0.9, 0, 0, 40)
     StopGameButton.Font = Enum.Font.SourceSansBold
-    StopGameButton.Text = "Ø¥ÙŠÙ‚Ø§Ù"
+    StopGameButton.Text = "إيقاف"
     StopGameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     StopGameButton.TextSize = 16
     StopGameButton.Visible = false
 
     ScreenGui.Parent = guiParent
 
+    -- Toggle Button GUI (Separate for independent visibility)
+    local ToggleGui = Instance.new("ScreenGui")
+    ToggleGui.Name = toggleGuiName
+    ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ToggleGui.ResetOnSpawn = false
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Name = "ToggleButton"
+    ToggleButton.Parent = ToggleGui
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    ToggleButton.BorderColor3 = Color3.fromRGB(80, 80, 120)
+    ToggleButton.Position = UDim2.new(1, -110, 0, 10) -- Top-right corner
+    ToggleButton.Size = UDim2.new(0, 100, 0, 30)
+    ToggleButton.Font = Enum.Font.SourceSansBold
+    ToggleButton.Text = "إخفاء الواجهة"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.TextSize = 14
+    
+    ToggleGui.Parent = guiParent
+
     ---------------------------------------------------------------------
     -- // EVENT CONNECTIONS & LOGIC
     ---------------------------------------------------------------------
+
+    -- GUI Toggle Logic
+    ToggleButton.MouseButton1Click:Connect(function()
+        MainFrame.Visible = not MainFrame.Visible
+        if MainFrame.Visible then
+            ToggleButton.Text = "إخفاء الواجهة"
+        else
+            ToggleButton.Text = "إظهار الواجهة"
+        end
+    end)
     
-    -- Tab Switching
-    local function switchTab(tabName)
-        ChatSenderPage.Visible = (tabName == "Chat")
-        FlagGamePage.Visible = (tabName == "FlagGame")
-        ChatTabButton.BackgroundColor3 = (tabName == "Chat") and Color3.fromRGB(80, 80, 120) or Color3.fromRGB(55, 55, 75)
-        ChatTabButton.TextColor3 = (tabName == "Chat") and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
-        FlagGameTabButton.BackgroundColor3 = (tabName == "FlagGame") and Color3.fromRGB(80, 80, 120) or Color3.fromRGB(55, 55, 75)
-        FlagGameTabButton.TextColor3 = (tabName == "FlagGame") and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
-    end
-    ChatTabButton.MouseButton1Click:Connect(function() switchTab("Chat") end)
-    FlagGameTabButton.MouseButton1Click:Connect(function() switchTab("FlagGame") end)
-
-    -- Chat Sender
-    SendButton.MouseButton1Click:Connect(function() sendMessage(MessageBox.Text); MessageBox.Text = "" end)
-    MessageBox.FocusLost:Connect(function(enterPressed) if enterPressed then sendMessage(MessageBox.Text); MessageBox.Text = "" end end)
-
     -- Flag Game Logic
     local function startGame()
         if gameRunning then return end
         gameRunning = true
         StartGameButton.Visible = false
         StopGameButton.Visible = true
-        sendMessage("!Ø¨Ø¯Ø£Øª Ù„Ø¹Ø¨Ø© ØªØ®Ù…ÙŠÙ† Ø§Ù„Ø¹Ù„Ù…! Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¯ÙˆÙ„Ø© ÙÙŠ Ø§Ù„Ø¯Ø±Ø¯Ø´Ø©")
+        sendMessage("!بدأت لعبة تخمين العلم! اكتب اسم الدولة في الدردشة")
 
         task.spawn(function()
             while gameRunning do
                 currentFlagData = flagsData[math.random(#flagsData)]
-                sendMessage("Ø®Ù…Ù† Ø§Ù„Ø¹Ù„Ù…: " .. currentFlagData.flag)
+                sendMessage("خمن العلم: " .. currentFlagData.flag)
                 
                 local roundStartTime = tick()
-                local guessedCorrectly = false
                 
                 -- Timer update loop
                 task.spawn(function()
                     while gameRunning and currentFlagData and (tick() - roundStartTime) < timePerRound do
                         local timeElapsed = tick() - roundStartTime
-                        TimeLabel.Text = "Ø§Ù„ÙˆÙ‚Øª Ø§Ù„Ù…ØªØ¨Ù‚ÙŠ: " .. math.max(0, math.floor(timePerRound - timeElapsed))
+                        TimeLabel.Text = "الوقت المتبقي: " .. math.max(0, math.floor(timePerRound - timeElapsed))
                         task.wait(0.1)
                     end
                 end)
                 
                 -- Wait for the round to be guessed or for the time to run out
-                local success = roundGuessedEvent.Event:Wait(timePerRound)
+                roundGuessedEvent.Event:Wait(timePerRound)
                 
                 if not gameRunning then break end -- Exit if the game was stopped manually
 
-                if success then -- Player guessed correctly
-                    guessedCorrectly = true
-                else -- Time ran out
-                    if currentFlagData then -- Make sure it wasn't already guessed in the same frame
-                        local flagEmoji = currentFlagData.flag
-                        local mainAnswer = currentFlagData.answers[1]
-                        sendMessage(`Ø§Ù†ØªÙ‡Ù‰ Ø§Ù„ÙˆÙ‚Øª! ðŸ•” Ø§Ù„Ø¥Ø¬Ø§Ø¨Ø© Ø§Ù„ØµØ­ÙŠØ­Ø© ÙƒØ§Ù†Øª: {flagEmoji} ({mainAnswer})`)
-                    end
+                if currentFlagData then -- If it hasn't been set to nil by a correct guess
+                    -- This means time ran out
+                    local flagEmoji = currentFlagData.flag
+                    local mainAnswer = currentFlagData.answers[1]
+                    sendMessage(`انتهى الوقت! ⏳ الإجابة الصحيحة كانت: {flagEmoji} ({mainAnswer})`)
                 end
                 
                 currentFlagData = nil
                 if gameRunning then
-                    TimeLabel.Text = "Ø§Ù„Ø¬ÙˆÙ„Ø© Ø§Ù„ØªØ§Ù„ÙŠØ© Ø³ØªØ¨Ø¯Ø£ Ù‚Ø±ÙŠØ¨Ø§Ù‹..."
+                    TimeLabel.Text = "الجولة التالية ستبدأ قريباً..."
                     task.wait(5) -- Pause between rounds
                 end
             end
@@ -362,8 +323,8 @@ local function CreateUniversalGui()
             currentFlagData = nil
             StartGameButton.Visible = true
             StopGameButton.Visible = false
-            TimeLabel.Text = "Ø§Ø¶ØºØ· Ø§Ø¨Ø¯Ø£ Ù„Ø¨Ø¯Ø¡ Ø§Ù„Ù„Ø¹Ø¨Ø©"
-            sendMessage("!Ø§Ù†ØªÙ‡Øª Ù„Ø¹Ø¨Ø© ØªØ®Ù…ÙŠÙ† Ø§Ù„Ø¹Ù„Ù…")
+         TimeLabel.Text = "اضغط ابدأ لبدء اللعبة"
+            sendMessage("!انتهت لعبة تخمين العلم")
         end)
     end
     
@@ -384,18 +345,18 @@ local function CreateUniversalGui()
                 onMessageReceived(Players:GetPlayerByUserId(messageObject.TextSource.UserId), messageObject.Text)
             end
         end)
-        print("Universal GUI: Hooked into TextChatService.")
+        print("Flag Game GUI: Hooked into TextChatService.")
     else
         local function connectChatted(player)
             player.Chatted:Connect(function(message) onMessageReceived(player, message) end)
         end
         for _, player in ipairs(Players:GetPlayers()) do connectChatted(player) end
         Players.PlayerAdded:Connect(connectChatted)
-        print("Universal GUI: Hooked into Legacy Chat (Player.Chatted).")
+        print("Flag Game GUI: Hooked into Legacy Chat (Player.Chatted).")
     end
     
-    print("Universal GUI Loaded Successfully.")
+    print("Flag Game GUI Loaded Successfully.")
 end
 
 -- Wrap the entire script in a protected call to catch any initialization errors.
-pcall(CreateUniversalGui)
+pcall(CreateFlagGameGui)
